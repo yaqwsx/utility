@@ -1,0 +1,90 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# autohor: Jan "yaqwsx" Mrázek, 2016
+
+usage = """Converts LLVM bitcode file to PDF with control flow graph, call graph,
+dominance tree, postdominance tree, regions
+
+Usage:
+    llvm2cfg <command> <input> <output_prefix>
+    llvm2cfg --help
+
+Options:
+    -h --help print help
+
+Commands:
+    callgraph     - Print call graph
+    cfg           - Print CFG of function
+    cfg-only      - Print CFG of function (with no function bodies)
+    dom           - Print dominance tree of function
+    dom-only      - Print dominance tree of function (with no function bodies)
+    postdom       - Print postdominance tree of function
+    postdom-only  - Print postdominance tree of function (with no function bodies)
+    regions       - Print regions of function
+    regions-only  - Print regions of function (with no function bodies)
+"""
+
+import sys, os, tempfile, shutil
+
+commands = ["callgraph", "cfg", "cfg-only", "dom", "dom-only",
+    "postdom", "postdom-only", "regions", "regions-only"]
+
+command = ""
+files = []
+
+for arg in sys.argv[1:]:
+    if arg[0] == "-":
+        if arg == "-h" or arg == "--help":
+            print(usage)
+            sys.exit(0)
+        else:
+            print("Invalid argument: {0}!".format(arg))
+            print(usage)
+            sys.exit(1)
+    else:
+        if len(command) == 0:
+            if not arg in commands:
+                print("Unknown command {0}".format(command))
+                sys.exit(1)
+            command = arg
+            continue
+        if len(files) == 2:
+            print("More parameters than expected!")
+            print(usage)
+            sys.exit(1)
+        files.append(arg)
+
+if len(files) == 1:
+    print("No output prefix specified!")
+    print(usage)
+    sys.exit(1)
+
+if len(files) == 0:
+    print("No input file specified!")
+    print(usage)
+    sys.exit(1)
+
+try:
+    tmpdir = tempfile.mkdtemp()
+    bitcode = os.path.abspath(files[0])
+
+    # Run opt to produce dot file
+    print("Running opt to produce dot files...")
+    r = os.system("cd {0}; opt -dot-{1} {2} > /dev/null"
+        .format(tmpdir, command, bitcode))
+    if r != 0:
+        sys.exit(1)
+
+    print("Converting dot files to PDF...")
+    for f in os.listdir(tmpdir):
+        o = files[1] + f + ".pdf"
+        f = os.path.join(tmpdir, f)
+        os.system("dot -Tpdf -o {0} {1}".format(o, f))
+
+    print("Done")
+finally:
+    try:
+        shutil.rmtree(tmpdir)
+    except OSError as exc:
+        if exc.errno != errno.ENOENT:
+            raise
