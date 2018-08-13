@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+"""
+Simple tool for downloading files from uloz.to. Inspired by Vžum by Popcorn
+(http://vzum.8u.cz/).
+"""
+
 import requests
 from PIL import Image, ImageTk
 import tkinter as tk
