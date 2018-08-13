@@ -1,0 +1,191 @@
+#!/usr/bin/env python3
+
+import requests
+from PIL import Image, ImageTk
+import tkinter as tk
+from lxml import html
+import sys
+import argparse
+import os
+import threading
+from copy import deepcopy
+from timeit import default_timer as timer
+import shutil
+
+def get_captcha(session):
+    r = session.get("https://uloz.to/reloadXapca.php")
+    c_info = r.json()
+    captcha_url = "http:" + c_info["image"]
+    c_img = session.get(captcha_url, stream=True)
+    img = Image.open(c_img.raw)
+
+    return img, c_info
+
+def solve_captcha_user(image, user_message):
+    root = tk.Tk()
+
+    text_label = tk.Label(text=user_message)
+    text_label.pack()
+
+    tk_image = ImageTk.PhotoImage(image=image)
+    image_label = tk.Label(image=tk_image)
+    image_label.pack()
+
+    input_box = tk.Entry(root)
+    input_box.pack()
+    input_box.focus()
+
+    captcha_value = ""
+    def on_click(x=None):
+        nonlocal captcha_value
+        captcha_value = input_box.get()
+        root.destroy()
+
+    button = tk.Button(root, text="Submit")
+    button.configure(command=on_click)
+    button.pack()
+    root.bind('<Return>', on_click)
+
+    root.mainloop()
+    return captcha_value
+
+def file_download_info(session, url, user_message = ""):
+    page_code = session.get(url, allow_redirects=True)
+    url = page_code.url
+    page = html.document_fromstring(page_code.text)
+    file_name = page.xpath("//h1")[0].text_content().strip()
+
+    c_img, c_info = get_captcha(session)
+    c_value = solve_captcha_user(c_img, user_message)
+
+    args = {
+        "timestamp": c_info["timestamp"],
+        "ts": page.get_element_by_id("frm-download-freeDownloadTab-freeDownloadForm-ts").attrib["value"],
+        "cid": page.get_element_by_id("frm-download-freeDownloadTab-freeDownloadForm-cid").attrib["value"],
+        "sign": page.get_element_by_id("frm-download-freeDownloadTab-freeDownloadForm-sign").attrib["value"],
+        "_token_": page.get_element_by_id("frm-download-freeDownloadTab-freeDownloadForm-_token_").attrib["value"],
+        "sign_a": page.get_element_by_id("frm-download-freeDownloadTab-freeDownloadForm-sign_a").attrib["value"],
+        "adi": page.get_element_by_id("frm-download-freeDownloadTab-freeDownloadForm-cid").attrib["value"],
+        "_do": "download-freeDownloadTab-freeDownloadForm-submit",
+        "hash": c_info["hash"],
+        "salt": c_info["salt"],
+        "captcha_type": "xapca",
+        "captcha_value": c_value
+    }
+
+    headers = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Accept-Language": "cs,en;q=0.9,sk;q=0.8,en-GB;q=0.7",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/68.0.3440.106 Safari/537.36",
+        "X-Requested-With": "XMLHttpRequest"
+    }
+
+    result = session.post(url, data=args, headers=headers, allow_redirects=True).json()
+    if result["status"] == "ok":
+        return file_name, result["url"]
+    return file_name, None
+
+def open_stream(session, url, range=None):
+    headers = {}
+    if range is not None:
+        headers = {"Range": "bytes={}-{}".format(range[0], range[1])}
+    r = session.get(url, headers=headers, stream=True)
+    return r, int(r.headers["Content-Length"])
+
+def download_stream(stream, filename, report = None):
+    step = 1024
+    progress = 0
+    target = int(stream.headers["Content-Length"])
+    with open(filename, "wb") as file:
+        for x in stream.iter_content(step):
+            progress += len(x)
+            if report:
+                report(progress, target, len(x))
+            file.write(x)
+
+class ProgressTracker():
+    def __init__(self, target, workers):
+        self.time = timer()
+        self.progress = 0
+        self.last_progress = 0
+        self.target = target
+        self.workers = workers
+
+    def update_from_worker(self, worker, p, t, d):
+        self.progress += d
+        if p == t:
+            self.workers -= 1
+
+    def get_status(self):
+        t = timer()
+        delta_t, self.time =  t - self.time, t
+        delta_d, self.last_progress = self.progress - self.last_progress, self.progress
+        progress = self.progress / 1024 / 1024
+        target = self.target / 1024 / 1024
+        speed = delta_d / delta_t / 1024 / 1024
+        expected_time = (self.target - self.progress) / (delta_d / delta_t)
+
+        return \
+            "{:.2f} MB/{:.2f} MB".format(progress, target) + \
+            " at speed: {:.2f} MB/s".format(speed) + \
+            " remaining {} s".format(int(expected_time)) + \
+            " active workers: {}".format(self.workers)
+
+def part_name(base, id):
+    return base + ".part_{:02d}".format(id)
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-o", "--output", help="Output directory", default="./")
+    parser.add_argument("-n", "--workers", help="Number of workers", default=10, type=int)
+    parser.add_argument("url", help="URL to download")
+    args = parser.parse_args()
+
+    session = requests.Session()
+    while True:
+        name, url = file_download_info(session, args.url, "Getting info")
+        if url is not None:
+            break
+    filename = os.path.join(args.output, name)
+    stream, length = open_stream(session, url)
+
+    progress = ProgressTracker(length, args.workers)
+
+    workers = []
+    for i in range(args.workers):
+        worker_id = i + 1
+        payload = int(length / args.workers)
+        r_from = i * payload
+        r_to = r_from + payload - 1 if i != args.workers - 1 else length
+
+        pname = part_name(filename, worker_id)
+        worker_session = requests.Session()
+        while True:
+            _, url = file_download_info(worker_session, args.url, "Worker {}".format(worker_id))
+            if url is not None:
+                break
+        stream, _ = open_stream(worker_session, url, (r_from, r_to))
+
+        job = lambda s=stream, n=pname: download_stream(s, n,
+            lambda p, t, d, id=worker_id: progress.update_from_worker(id, p, t, d))
+        t = threading.Thread(target=job)
+        workers.append(t)
+        t.start()
+
+    for x in workers:
+        while x.is_alive():
+            x.join(timeout=1)
+            sys.stdout.write("\033[F")
+            sys.stdout.write("\033[K")
+            print(progress.get_status())
+    print("Merging")
+    with open(filename, "wb") as dest:
+        for i in range(args.workers):
+            id = i + 1
+            sys.stdout.write("\033[F")
+            sys.stdout.write("\033[K")
+            print("Merging parts {} / {}".format(id, args.workers))
+            name = part_name(filename, id)
+            with open(name, "rb") as source:
+                shutil.copyfileobj(source, dest)
+            os.remove(name)
