@@ -153,6 +153,7 @@ if __name__ == "__main__":
             break
     if not os.path.exists(args.output):
         os.makedirs(args.output)
+    name = name.replace("/", "_")
     filename = os.path.join(args.output, name)
     stream, length = open_stream(session, url)
 
