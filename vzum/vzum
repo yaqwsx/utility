@@ -122,19 +122,25 @@ class ProgressTracker():
             self.workers -= 1
 
     def get_status(self):
-        t = timer()
-        delta_t, self.time =  t - self.time, t
-        delta_d, self.last_progress = self.progress - self.last_progress, self.progress
-        progress = self.progress / 1024 / 1024
-        target = self.target / 1024 / 1024
-        speed = delta_d / delta_t / 1024 / 1024
-        expected_time = (self.target - self.progress) / (delta_d / delta_t)
+        try:
+            t = timer()
+            delta_t, self.time =  t - self.time, t
+            delta_d, self.last_progress = self.progress - self.last_progress, self.progress
+            progress = self.progress / 1024 / 1024
+            target = self.target / 1024 / 1024
+            speed = delta_d / delta_t / 1024 / 1024
+            expected_time = (self.target - self.progress) / (delta_d / delta_t)
 
-        return \
-            "{:.2f} MB/{:.2f} MB".format(progress, target) + \
-            " at speed: {:.2f} MB/s".format(speed) + \
-            " remaining {} s".format(int(expected_time)) + \
-            " active workers: {}".format(self.workers)
+            return \
+                "{:.2f} MB/{:.2f} MB".format(progress, target) + \
+                " at speed: {:.2f} MB/s".format(speed) + \
+                " remaining {} s".format(int(expected_time)) + \
+                " active workers: {}".format(self.workers)
+        except:
+            return \
+                "{:.2f} MB/{:.2f} MB".format(progress, target) + \
+                " at unknown speed remaining unknown seconds" + \
+                " active workers: {}".format(self.workers)
 
 def part_name(base, id):
     return base + ".part_{:02d}".format(id)
