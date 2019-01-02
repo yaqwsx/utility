@@ -132,14 +132,14 @@ class ProgressTracker():
             expected_time = (self.target - self.progress) / (delta_d / delta_t)
 
             return \
-                "{:.2f} MB/{:.2f} MB".format(progress, target) + \
-                " at speed: {:.2f} MB/s".format(speed) + \
-                " remaining {} s".format(int(expected_time)) + \
+                "{:.2f} MB/{:.2f} MB,".format(progress, target) + \
+                " at speed: {:.2f} MB/s,".format(speed) + \
+                " remaining {} s,".format(int(expected_time)) + \
                 " active workers: {}".format(self.workers)
         except:
             return \
-                "{:.2f} MB/{:.2f} MB".format(progress, target) + \
-                " at unknown speed remaining unknown seconds" + \
+                "{:.2f} MB/{:.2f} MB,".format(progress, target) + \
+                " at unknown speed, remaining unknown s," + \
                 " active workers: {}".format(self.workers)
 
 def part_name(base, id):
