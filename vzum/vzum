@@ -151,6 +151,8 @@ if __name__ == "__main__":
         name, url = file_download_info(session, args.url, "Getting info")
         if url is not None:
             break
+    if not os.path.exists(args.output):
+        os.makedirs(args.output)
     filename = os.path.join(args.output, name)
     stream, length = open_stream(session, url)
 
