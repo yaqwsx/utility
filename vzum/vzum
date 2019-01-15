@@ -18,12 +18,22 @@ from timeit import default_timer as timer
 import shutil
 
 def get_captcha(session):
-    r = session.get("https://uloz.to/reloadXapca.php")
-    c_info = r.json()
-    captcha_url = "http:" + c_info["image"]
-    c_img = session.get(captcha_url, stream=True)
-    img = Image.open(c_img.raw)
-
+    if not hasattr(get_captcha, "captchas"):
+        get_captcha.captchas = []
+    if not hasattr(get_captcha, "buffer_size"):
+        get_captcha.buffer_size = 50
+    if len(get_captcha.captchas) == 0:
+        print("Caching {} captchas, please wait".format(get_captcha.buffer_size))
+        for i in range(get_captcha.buffer_size):
+            r = session.get("https://uloz.to/reloadXapca.php")
+            c_info = r.json()
+            captcha_url = "http:" + c_info["image"]
+            c_img = session.get(captcha_url, stream=True)
+            img = Image.open(c_img.raw)
+            get_captcha.captchas.append((img, c_info))
+        get_captcha.buffer_size = 1
+    img, c_info = get_captcha.captchas[-1]
+    del get_captcha.captchas[-1]
     return img, c_info
 
 def solve_captcha_user(image, user_message):
@@ -151,6 +161,8 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--workers", help="Number of workers", default=10, type=int)
     parser.add_argument("url", help="URL to download")
     args = parser.parse_args()
+
+    get_captcha.buffer_size = 3 * args.workers
 
     session = requests.Session()
     while True:
