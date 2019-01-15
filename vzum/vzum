@@ -184,7 +184,8 @@ if __name__ == "__main__":
             lambda p, t, d, id=worker_id: progress.update_from_worker(id, p, t, d))
         t = threading.Thread(target=job)
         workers.append(t)
-        t.start()
+    for worker in workers:
+        worker.start()
 
     for x in workers:
         while x.is_alive():
