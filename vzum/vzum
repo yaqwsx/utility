@@ -141,10 +141,22 @@ class ProgressTracker():
             speed = delta_d / delta_t / 1024 / 1024
             expected_time = (self.target - self.progress) / (delta_d / delta_t)
 
+            expected_hours = int(expected_time / 3600)
+            expected_time = int(expected_time % 3600)
+            expected_mins = int(expected_time / 60)
+            expected_time = int(expected_time % 60)
+
+            if expected_hours != 0:
+                expected_str = "{} h {} min".format(expected_hours, expected_mins)
+            elif expected_mins != 0:
+                expected_str = "{} min {} s".format(expected_mins, expected_time)
+            else:
+                expected_str = "{} s".format(expected_time)
+
             return \
                 "{:.2f} MB/{:.2f} MB,".format(progress, target) + \
                 " at speed: {:.2f} MB/s,".format(speed) + \
-                " remaining {} s,".format(int(expected_time)) + \
+                " remaining {},".format(expected_str) + \
                 " active workers: {}".format(self.workers)
         except:
             return \
