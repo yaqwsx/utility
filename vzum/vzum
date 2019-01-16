@@ -121,12 +121,15 @@ def download_stream(stream, filename, report = None):
 class ProgressTracker():
     def __init__(self, target, workers):
         self.time = timer()
+        self.init = 0
         self.progress = 0
         self.last_progress = 0
         self.target = target
         self.workers = workers
 
     def update_from_worker(self, worker, p, t, d):
+        if self.init == 0:
+            self.init = timer()
         self.progress += d
         if p == t:
             self.workers -= 1
@@ -134,12 +137,12 @@ class ProgressTracker():
     def get_status(self):
         try:
             t = timer()
-            delta_t, self.time =  t - self.time, t
+            delta_t, elapsed, self.time =  t - self.time, t - self.init, t
             delta_d, self.last_progress = self.progress - self.last_progress, self.progress
             progress = self.progress / 1024 / 1024
             target = self.target / 1024 / 1024
             speed = delta_d / delta_t / 1024 / 1024
-            expected_time = (self.target - self.progress) / (delta_d / delta_t)
+            expected_time = (self.target - self.progress) / (self.progress / elapsed)
 
             expected_hours = int(expected_time / 3600)
             expected_time = int(expected_time % 3600)
