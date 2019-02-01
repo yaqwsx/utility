@@ -210,9 +210,8 @@ if __name__ == "__main__":
         job = lambda s=stream, n=pname: download_stream(s, n,
             lambda p, t, d, id=worker_id: progress.update_from_worker(id, p, t, d))
         t = threading.Thread(target=job)
+        t.start()
         workers.append(t)
-    for worker in workers:
-        worker.start()
 
     for x in workers:
         while x.is_alive():
